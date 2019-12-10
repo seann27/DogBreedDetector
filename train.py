@@ -148,8 +148,8 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     ### Define optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
     # train the model
     model = train(10, loaders, model, optimizer,
-                          criterion, device, 'model_trained.pt')
+                          criterion, device, '../Files/model_trained.pt')
