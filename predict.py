@@ -52,6 +52,50 @@ if os.path.exists(file) is False:
 	print("Could not find file "+file)
 	exit()
 
+def face_detector(img_path):
+    img = cv2.imread(img_path)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray)
+    return len(faces) > 0
+
+VGG16 = models.vgg16(pretrained=True)
+VGG16.to(device)
+def VGG16_predict(img_path):
+    '''
+    Use pre-trained VGG-16 model to obtain index corresponding to
+    predicted ImageNet class for image at specified path
+
+    Args:
+        img_path: path to an image
+
+    Returns:
+        Index corresponding to VGG-16 model's prediction
+    '''
+    img_path = os.path.normpath(img_path)
+    ## TODO: Complete the function.
+    ## Load and pre-process an image from the given img_path
+    tr = transforms.Compose([transforms.Resize(225),
+                         transforms.CenterCrop(224),
+                         transforms.ToTensor(),
+                         transforms.Normalize([0.485, 0.456, 0.406],
+                                              [0.229, 0.224, 0.225])])
+    np_tensor = process_image(img_path,tr)
+    np_tensor.unsqueeze_(0)
+    np_tensor = np_tensor.float()
+    np_tensor = np_tensor.to(device)
+    log_ps = VGG16.forward(np_tensor)
+    ps = torch.exp(log_ps)
+    top_p,top_class = ps.topk(1,dim=1)
+
+    ## Return the *index* of the predicted class for that image
+
+    return int(top_class) # predicted class index
+
+def dog_detector(img_path):
+    ## TODO: Complete the function.
+    index = VGG16_predict(img_path)
+
+    return index >= 151 and index <= 268
 
 def generate_image_map(dog_files):
 	image_map = {}
@@ -105,22 +149,41 @@ def filter_matches(matches):
 			filtered['Other'] += val
 	return filtered
 
-def plot_figures(images, nrows=1, ncols=2):
-	img1 = Image.open(images[0])
-	img2 = Image.open(images[1])
-	img2_title = os.path.basename(images[1])
-	img2_title_words = img2_title.replace("_"," ").split()
-	img2_title = ' '.join(img2_title_words[:-1])
-	f, (ax1, ax2) = plt.subplots(1, 2)
-	ax1.imshow(img1)
-	ax1.set_title(name)
-	ax1.set_xticks([])
-	ax1.set_yticks([])
-	ax2.imshow(img2)
-	ax2.set_title(img2_title)
-	ax2.set_xticks([])
-	ax2.set_yticks([])
-	plt.show()
+def plot_figures(file, best_match, comparison, matches, text):
+    my_imgs = [Image.open(file),Image.open(comparison)]
+    my_labels = ['Your image','{}\n{:.2f}% match'.format(best_match,matches[best_match]*100)]
+
+    for key,val in matches.items():
+        if key != 'Other' and key != best_match:
+            my_imgs.append(Image.open(get_breed_image(key,img_map)))
+            my_labels.append('{}\n{:.2f}% match'.format(key,val*100))
+
+    f = plt.figure(figsize=(8,8))
+    f.suptitle(text, fontsize=16)
+    ax1 = f.add_subplot(1,2,1)
+    ax1.imshow(my_imgs[0])
+    ax1.set_title(my_labels[0])
+    ax1.set_xticks([])
+    ax1.set_yticks([])
+    ax2 = f.add_subplot(1,2,2)
+    ax2.imshow(my_imgs[1])
+    ax2.set_title(my_labels[1])
+    ax2.set_xticks([])
+    ax2.set_yticks([])
+    f.subplots_adjust(top=1)
+
+    if len(my_imgs) > 2:
+        f2 = plt.figure(figsize=(6,6))
+        f2.suptitle('Other resemblances', fontsize=12)
+        for idx,i in enumerate(my_imgs[2:]):
+            ax = f2.add_subplot(1,(len(my_imgs)-2),idx+1)
+            ax.imshow(i)
+            ax.set_title(my_labels[idx+2])
+            ax.set_xticks([])
+            ax.set_yticks([])
+        f2.subplots_adjust(top=1)
+
+    plt.show()
 
 def predict(file,model,img_map,transforms):
 	matches = {}
@@ -140,12 +203,7 @@ def predict(file,model,img_map,transforms):
 			best = val
 			best_match = class_names[key]
 	comparison = get_breed_image(best_match,img_map)
-	print("{:.4f}% sure you are a {}".format(best,best_match))
-	# show_image(file)
-	# print(comparison)
-	# show_image(comparison)
-	# return best_match,filter_matches(matches)
-	plot_figures([file,comparison])
+	return best_match,comparison,filter_matches(matches)
 
 # build and initialize model
 model = models.vgg16(pretrained=True)
@@ -184,4 +242,14 @@ dog_files = np.array(glob(os.path.normpath("../Files/dogImages/*/*/*")))
 
 img_map = generate_image_map(dog_files)
 
-predict(file,model,img_map,test_val_transforms)
+text = "Error, couldn't detect a dog or person"
+if dog_detector(file):
+    text = "Woof Woof Hello Doggy!"
+elif face_detector(file) > 0:
+    text = "Hello human! If you were a dog..."
+else:
+    print(text)
+    exit()
+
+best_match,comparison,matches = predict(file,model,img_map,test_val_transforms)
+plot_figures(file,best_match,comparison,matches,text)

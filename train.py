@@ -135,10 +135,10 @@ if __name__ == "__main__":
                                    nn.Linear(3072, 1024),
                                    nn.ReLU(),
                                    nn.Dropout(p=0.2),
-                                   nn.Linear(1024, 306),
+                                   nn.Linear(1024, 512),
                                    nn.ReLU(),
                                    nn.Dropout(p=0.2),
-                                   nn.Linear(306, 133),
+                                   nn.Linear(512, 133),
                                    nn.LogSoftmax(dim=1))
 
     model.classifier = classifier
